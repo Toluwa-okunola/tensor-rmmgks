@@ -22,7 +22,7 @@ from pylops import Identity, LinearOperator
 import pickle
 from typing import List, Tuple, Optional
 from copy import deepcopy
-
+from ttrips.solvers.regparam import *
 
 from dp import *
 
@@ -121,14 +121,34 @@ tqdm_ = True,kmin=3,l_max = 5,l_curve_plot=False,compute_V = True, alpha = 1,lam
         LL = LV * (wr**power)
         (Q_L, R_L) = la.qr(LL, mode='economic') 
         if regparam == 'gcv':
+            if ii <20:  # just first iteration
+                grid = np.logspace(-9, 3, 200)
+                gcv_func = lambda lam: gcv_numerator_2(lam, Q_A, R_A, R_L, (wf**power)*b) / \
+                                        gcv_denominator_2(lam, R_A, R_L, (wf**power)*b)
+                vals = [gcv_func(lam) for lam in grid]
+                
+                plt.figure()
+                plt.loglog(grid, vals)
+                plt.axvline(lambdah, color='r', linestyle='--', label=f'GCV pick: {lambdah:.2e}')
+                plt.xlabel('lambda')
+                plt.ylabel('GCV')
+                plt.title('GCV surface - iteration 0')
+                plt.legend()
+                plt.show()
+                
+                print(f'GCV lambda: {lambdah:.2e}')
+                print(f'R_A shape: {R_A.shape}, R_L shape: {R_L.shape}')
+                print(f'Condition number R_A: {np.linalg.cond(R_A):.2e}')
             lambdah = generalized_crossvalidation_2(Q_A, R_A, R_L, (wf**power) *b, **kwargs)
         elif regparam == 'gcv_tol':
             lambdah = generalized_crossvalidation_tol(Q_A, R_A, R_L, (wf**power) *b, **kwargs)
         elif regparam == 'dp':
             lambdah = discrepancy_principle(Q_A, R_A, R_L, (wf**power) *b, **kwargs)
-        elif regparam == 'l_curve':
+        elif regparam == 'lcurve':
             #print(Q_A.shape,((wf**power)*b).shape )
-            lambdah = l_curve(R_A, R_L,Q_A.T@ ((wf**power)*b),plot=l_curve_plot)
+            lambdah = lcurve(R_A, R_L,Q_A.T@ ((wf**power)*b),AA,LL,b,**kwargs)
+        elif regparam == 'gridsearch':
+            lambdah = estimate_lambda(R_A, R_L, Q_A.T@ ((wf**power)*b), regparam,x_true,V, **kwargs)
         else:
             lambdah = regparam
         # if (len(lambda_history)>0) and (lambdah < tolambdah): #1e-6):
